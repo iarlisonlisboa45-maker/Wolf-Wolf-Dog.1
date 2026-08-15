@@ -1,0 +1,15 @@
+WOLF WOLF DOG v0.1 — COMPILAÇÃO AUTOMÁTICA
+
+1. Crie um repositório no GitHub.
+2. Envie TODOS os arquivos desta pasta para o repositório.
+3. Abra a aba "Actions".
+4. Se aparecer o workflow "Build Wolf Wolf Dog APK", abra-o.
+5. Use "Run workflow" para iniciar manualmente.
+6. Espere o build terminar.
+7. Abra o build concluído e procure "Artifacts".
+8. Baixe "Wolf-Wolf-Dog-v0.1-debug".
+9. Dentro do ZIP estará o app-debug.apk.
+
+O GitHub Actions faz a compilação pesada nos servidores; seu celular não precisa instalar Android SDK nem Gradle.
+
+Observação: esta é uma APK de debug para testes, não uma versão assinada para publicação na Google Play.
