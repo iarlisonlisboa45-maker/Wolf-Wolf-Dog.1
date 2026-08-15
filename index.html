@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Wolf Wolf Dog v0.1</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101522;font-family:Arial,sans-serif;touch-action:none}
+#game{width:100%;height:100%}
+.hud{position:fixed;inset:0;pointer-events:none;color:#fff}
+.top{display:flex;justify-content:space-between;gap:8px;padding:10px}
+.card{background:#111a2bd9;border:1px solid #ffffff22;border-radius:12px;padding:8px 12px;backdrop-filter:blur(5px)}
+#role{font-weight:800} #tasks{min-width:160px}
+.bar{height:7px;background:#263047;border-radius:10px;overflow:hidden;margin-top:5px}
+.fill{height:100%;width:0;background:#6ee7b7}
+.bottom{position:absolute;left:10px;right:10px;bottom:12px;display:flex;justify-content:space-between;align-items:end}
+button{pointer-events:auto;border:0;border-radius:14px;padding:13px 16px;font-weight:800;color:#fff;background:#3949ab}
+button:active{transform:scale(.96)}
+#actions{display:flex;gap:8px}
+#message{position:absolute;left:50%;top:16%;transform:translateX(-50%);background:#111a2bee;padding:12px 18px;border-radius:14px;display:none;text-align:center;max-width:80%}
+#menu{position:fixed;inset:0;background:#0b1020;display:flex;align-items:center;justify-content:center;color:white;text-align:center;z-index:5}
+.panel{width:min(90%,420px);background:#151e33;border:1px solid #ffffff18;border-radius:22px;padding:24px;box-shadow:0 15px 50px #0008}
+.panel h1{margin-top:0}.panel p{opacity:.8;line-height:1.4}
+#start{width:100%;font-size:18px}
+.small{font-size:12px;opacity:.65}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="menu">
+  <div class="panel">
+    <h1>🐺 Wolf Wolf Dog</h1>
+    <p>Protótipo v0.1 — modo local de teste.</p>
+    <p>Você é um <b>Cachorro</b>. Complete as tarefas, observe os outros e participe da votação.</p>
+    <button id="start">JOGAR</button>
+    <p class="small">Esta versão é um protótipo offline. O multiplayer será adicionado depois.</p>
+  </div>
+</div>
+<div class="hud">
+  <div class="top">
+    <div class="card"><span id="role">🐶 CACHORRO</span><br><span id="status">Faça as tarefas.</span></div>
+    <div class="card" id="tasks">Tarefas: <b id="taskCount">0/5</b><div class="bar"><div class="fill" id="taskFill"></div></div></div>
+  </div>
+  <div id="message"></div>
+  <div class="bottom">
+    <button id="meeting">🚨 REUNIÃO</button>
+    <div id="actions"><button id="taskBtn">🔧 TAREFA</button></div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>
+let game, player, cursors, keys, tasks=[], bots=[], taskDone=0, running=false;
+const W=1600,H=1000;
+
+function showMessage(t,ms=1800){
+ const el=document.getElementById('message'); el.textContent=t; el.style.display='block';
+ clearTimeout(showMessage.timer); showMessage.timer=setTimeout(()=>el.style.display='none',ms);
+}
+function updateHud(){
+ document.getElementById('taskCount').textContent=taskDone+'/5';
+ document.getElementById('taskFill').style.width=(taskDone*20)+'%';
+}
+function nearTask(){
+ return tasks.some(t=>Phaser.Math.Distance.Between(player.x,player.y,t.x,t.y)<90);
+}
+function doTask(){
+ if(!running)return;
+ if(!nearTask()){showMessage('Chegue perto de uma tarefa.');return;}
+ const t=tasks.find(t=>Phaser.Math.Distance.Between(player.x,player.y,t.x,t.y)<90);
+ if(t.done){showMessage('Esta tarefa já foi feita.');return;}
+ t.done=true; t.rect.setFillStyle(0x54d6a0); taskDone++; updateHud();
+ showMessage('✅ Tarefa concluída! '+taskDone+'/5');
+ if(taskDone===5) showMessage('🎉 Todas as tarefas concluídas!',3000);
+}
+function meeting(){
+ if(!running)return;
+ showMessage('🚨 Reunião de emergência! Protótipo: votação simulada.');
+ setTimeout(()=>showMessage('🗳️ Ninguém foi expulso nesta versão.',2500),1900);
+}
+
+class Scene extends Phaser.Scene{
+ constructor(){super('main')}
+ create(){
+  this.cameras.main.setBackgroundColor('#172033');
+  // arena
+  this.add.rectangle(W/2,H/2,W,H,0x1b2638);
+  for(let x=100;x<W;x+=100)this.add.line(0,0,x,0,x,H,0x243149).setOrigin(0);
+  for(let y=100;y<H;y+=100)this.add.line(0,0,0,y,W,y,0x243149).setOrigin(0);
+  // walls
+  this.add.rectangle(W/2,35,W,70,0x0d1422);
+  this.add.rectangle(W/2,H-35,W,70,0x0d1422);
+  this.add.rectangle(35,H/2,70,H,0x0d1422);
+  this.add.rectangle(W-35,H/2,70,H,0x0d1422);
+
+  const taskPos=[[260,220,'⚙️'],[700,180,'🔬'],[1300,240,'💻'],[420,760,'🧹'],[1120,760,'🔋']];
+  tasks=taskPos.map(([x,y,emoji])=>{
+    const r=this.add.rectangle(x,y,72,72,0xe9b44c).setStrokeStyle(4,0xffe8a3);
+    this.add.text(x,y,emoji,{fontSize:'30px'}).setOrigin(.5);
+    return {x,y,done:false,rect:r};
+  });
+  // bots
+  bots=[
+   {x:350,y:500,c:0x6fa8dc,name:'Bolt'},
+   {x:850,y:350,c:0xe06666,name:'Rex'},
+   {x:1250,y:560,c:0x93c47d,name:'Luna'},
+   {x:800,y:800,c:0xc27ba0,name:'Max'}
+  ].map(b=>{
+    const s=this.add.circle(b.x,b.y,25,b.c).setStrokeStyle(4,0xffffff);
+    this.add.text(b.x,b.y-42,b.name,{fontSize:'15px',color:'#fff'}).setOrigin(.5);
+    b.s=s; b.tx=Phaser.Math.Between(150,1450); b.ty=Phaser.Math.Between(150,850); return b;
+  });
+  player=this.add.circle(800,500,28,0x4c78ff).setStrokeStyle(5,0xffffff);
+  this.add.text(800,455,'VOCÊ',{fontSize:'15px',fontStyle:'bold'}).setOrigin(.5);
+  cursors=this.input.keyboard.createCursorKeys();
+  keys=this.input.keyboard.addKeys('W,A,S,D');
+  this.cameras.main.startFollow(player,true,.08,.08);
+  this.cameras.main.setBounds(0,0,W,H);
+  this.input.addPointer(2);
+  this.input.on('pointerdown',p=>{ if(p.y>innerHeight*.55){ moveTarget={x:p.worldX,y:p.worldY}; }});
+  this.add.text(80,90,'CANIL CENTRAL',{fontSize:'26px',fontStyle:'bold',color:'#ffffff'}).setScrollFactor(0);
+  running=true;
+ }
+ update(){
+  if(!running)return;
+  let vx=0,vy=0;
+  if(cursors.left.isDown||keys.A.isDown)vx=-1;
+  if(cursors.right.isDown||keys.D.isDown)vx=1;
+  if(cursors.up.isDown||keys.W.isDown)vy=-1;
+  if(cursors.down.isDown||keys.S.isDown)vy=1;
+  if(vx||vy){moveTarget=null; const n=Math.hypot(vx,vy); player.x+=vx/n*4.2; player.y+=vy/n*4.2;}
+  else if(moveTarget){
+   const dx=moveTarget.x-player.x,dy=moveTarget.y-player.y,d=Math.hypot(dx,dy);
+   if(d>8){player.x+=dx/d*4.2;player.y+=dy/d*4.2;}
+  }
+  player.x=Phaser.Math.Clamp(player.x,90,W-90); player.y=Phaser.Math.Clamp(player.y,110,H-90);
+  bots.forEach(b=>{
+   if(Phaser.Math.Distance.Between(b.s.x,b.s.y,b.tx,b.ty)<20){b.tx=Phaser.Math.Between(150,1450);b.ty=Phaser.Math.Between(150,850);}
+   const dx=b.tx-b.s.x,dy=b.ty-b.s.y,d=Math.hypot(dx,dy); b.s.x+=dx/d*1.25;b.s.y+=dy/d*1.25;
+  });
+ }
+}
+let moveTarget=null;
+document.getElementById('start').onclick=()=>{
+ document.getElementById('menu').style.display='none';
+ game=new Phaser.Game({type:Phaser.AUTO,parent:'game',width:innerWidth,height:innerHeight,scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},scene:Scene});
+};
+document.getElementById('taskBtn').onclick=doTask;
+document.getElementById('meeting').onclick=meeting;
+updateHud();
+</script>
+</body>
+</html>
